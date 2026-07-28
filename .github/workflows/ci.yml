@@ -53,6 +53,9 @@ jobs:
   # Regenerating needs the contract, which is in another repository. Checking the
   # result against what is committed is what keeps the two from drifting without
   # putting protoc between a customer and `cargo add`.
+  #
+  # MOQOM_REPO_TOKEN is an organisation secret with read access to moqom-cloud.
+  # GITHUB_TOKEN cannot stand in for it, being scoped to this repository alone.
   proto:
     name: Generated bindings
     runs-on: ubuntu-latest
@@ -65,7 +68,7 @@ jobs:
         with:
           repository: moqom-cloud/moqom
           path: moqom
-          token: ${{ secrets.PLATFORM_REPO_TOKEN }}
+          token: ${{ secrets.MOQOM_REPO_TOKEN }}
 
       - uses: arduino/setup-protoc@v3
         with:
