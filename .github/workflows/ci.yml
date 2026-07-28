@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  rust:
+    name: Rust
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      # The interop tests are #[ignore]d and stay skipped here: they need a Go
+      # toolchain and a running control plane. The platform repository runs them,
+      # in the job that has both.
+      - name: Test
+        run: cargo test
+
+      - name: Docs
+        run: cargo doc --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+      # The whole reason this is not part of the engine workspace. Keeping a QUIC
+      # stack out of a backend's dependency graph is a promise, and a promise
+      # nothing checks is one a transitive dependency can break silently.
+      - name: No QUIC in the graph
+        run: |
+          if cargo tree --prefix none --no-dedupe | grep -qE '^(quinn|quinn-proto|quinn-udp) '; then
+            echo "::error::A QUIC stack reached this SDK's dependency graph."
+            cargo tree --invert quinn || true
+            exit 1
+          fi
+
+  # Regenerating needs the contract, which is in another repository. Checking the
+  # result against what is committed is what keeps the two from drifting without
+  # putting protoc between a customer and `cargo add`.
+  proto:
+    name: Generated bindings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: moqom-rust
+
+      - uses: actions/checkout@v7
+        with:
+          repository: moqom-cloud/moqom
+          path: moqom
+          token: ${{ secrets.PLATFORM_REPO_TOKEN }}
+
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: moqom-rust
+
+      - name: Regenerate
+        working-directory: moqom-rust
+        env:
+          MOQOM_REGENERATE_PROTO: "1"
+          MOQOM_PROTO_ROOT: ${{ github.workspace }}/moqom/proto
+        run: cargo build -p moqom-sdk
+
+      - name: Fail if it changed
+        working-directory: moqom-rust
+        run: |
+          if ! git diff --quiet -- moqom-sdk/src/generated; then
+            echo "::error::The committed bindings no longer match proto/."
+            echo "Regenerate with MOQOM_REGENERATE_PROTO=1 and commit the result."
+            git diff -- moqom-sdk/src/generated
+            exit 1
+          fi

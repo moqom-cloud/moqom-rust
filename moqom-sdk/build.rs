@@ -13,10 +13,21 @@ fn main() {
         return;
     }
 
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../proto")
-        .canonicalize()
-        .expect("the proto directory is where it is expected");
+    // The contract lives in the platform repository, which is a different
+    // repository to this one: `go get` and `cargo add` both resolve a package by
+    // its own URL, so an SDK is only consumable from a repository of its own.
+    // `MOQOM_PROTO_ROOT` is how `tools/generate-proto.sh` says where it is
+    // calling from; the fallback assumes the two repositories are siblings,
+    // which is where they land if you cloned both into the same directory.
+    let root = match std::env::var_os("MOQOM_PROTO_ROOT") {
+        Some(given) => std::path::PathBuf::from(given),
+        None => std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../moqom/proto"),
+    }
+    .canonicalize()
+    .expect(
+        "the proto directory is where it is expected: set MOQOM_PROTO_ROOT, \
+         or check out moqom-cloud/moqom beside this repository",
+    );
     let out = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/generated");
     std::fs::create_dir_all(&out).expect("creating the generated directory");
 

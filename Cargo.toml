@@ -2,15 +2,19 @@
 resolver = "3"
 members = ["moqom-sdk"]
 
-# A workspace of its own, not a member of `rs/`.
+# A repository of its own, not part of moqom-engine.
 #
-# Two reasons, and the licence is the smaller one. `rs/` is where the relay lives,
-# which is BUSL-1.1, and this is Apache-2.0 -- but crates carry their own licence
-# fields, so that alone would not need a split. The reason that does is that `rs/`
-# patches crates.io to a vendored quinn, and a patch applies to a whole workspace.
-# A backend that takes a dependency on this SDK should not thereby take a
-# dependency on our transport tree, so this workspace has no patch section and no
-# QUIC in its graph at all.
+# Two reasons, and the licence is the smaller one. The engine is where the relay
+# lives, which is BUSL-1.1, and this is Apache-2.0 -- but crates carry their own
+# licence fields, so that alone would not need a split. The reason that does is
+# that the engine patches crates.io to a vendored quinn, and a patch applies to a
+# whole workspace. A backend that takes a dependency on this SDK should not
+# thereby take a dependency on our transport tree, so this workspace has no patch
+# section and no QUIC in its graph at all -- and being a separate repository is
+# what makes that structural rather than a rule somebody has to remember.
+#
+# The contract it is generated from lives in moqom-cloud/moqom. build.rs finds it
+# via MOQOM_PROTO_ROOT or a sibling checkout, and only when regenerating.
 [workspace.package]
 edition = "2024"
 rust-version = "1.97"
