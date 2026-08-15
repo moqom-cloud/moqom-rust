@@ -384,6 +384,10 @@ pub struct Participant {
     /// Which relay holds this session. Operational detail, useful when a support
     /// question turns out to be a question about one machine.
     pub relay_id: String,
+
+    /// BCP 47 language tag this participant last published on their catalog.
+    /// Empty until a catalog arrives, and updated when they change it mid-call.
+    pub locale: String,
 }
 
 /// What an observer is for.

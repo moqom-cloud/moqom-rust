@@ -455,6 +455,7 @@ pub(crate) fn participant_in(wire: proto::Participant) -> Participant {
         is_backstage: wire.is_backstage,
         joined_at: time_in(wire.joined_at),
         relay_id: wire.relay_id,
+        locale: wire.locale,
     }
 }
 

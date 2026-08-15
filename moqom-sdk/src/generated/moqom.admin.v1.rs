@@ -520,6 +520,10 @@ pub struct Participant {
     /// support question is really a question about one machine.
     #[prost(string, tag = "10")]
     pub relay_id: ::prost::alloc::string::String,
+    /// BCP 47 language tag this participant last published on their catalog.
+    /// Empty until a catalog arrives, and updated when they change it mid-call.
+    #[prost(string, tag = "12")]
+    pub locale: ::prost::alloc::string::String,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct Watchdog {

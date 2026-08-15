@@ -5,8 +5,8 @@ participant: it mints the tokens your users join with, creates and closes rooms,
 moderates them, and follows what happens in them.
 
 Nothing here speaks MOQT, and that is the point — there is no QUIC in this crate's
-dependency graph. A Rust process that wants to *receive frames* is a MOQT
-subscriber and is a different dependency.
+dependency graph. A Rust process that wants to *receive frames* depends on
+`moqom-client` (in the engine workspace), not this crate.
 
 ```toml
 [dependencies]
