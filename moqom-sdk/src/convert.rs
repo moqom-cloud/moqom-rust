@@ -14,9 +14,9 @@ use std::time::SystemTime;
 use crate::grants::{Capability, Grants, Preset, Publish};
 use crate::proto;
 use crate::types::{
-    AgeGate, BanScope, BanSubject, Code, Entry, Identity, Lifecycle, Media, MuteScope, Participant,
-    ParticipantRef, Policy, Presence, RecordingPolicy, RoomState, Verb, Watchdog, WatchdogHealth,
-    WatchdogKind, WatchdogOperator,
+    AgeGate, BanScope, BanSubject, Code, E2eePolicy, Entry, Identity, Lifecycle, Media, MuteScope,
+    Participant, ParticipantRef, Policy, Presence, RecordingPolicy, RoomState, Verb, Watchdog,
+    WatchdogHealth, WatchdogKind, WatchdogOperator,
 };
 
 /// Capability bits paired with their wire values.
@@ -206,6 +206,24 @@ pub(crate) fn recording_out(policy: RecordingPolicy) -> i32 {
         RecordingPolicy::Prohibited => proto::RecordingPolicy::Prohibited,
     };
     wire as i32
+}
+
+pub(crate) fn e2ee_out(policy: E2eePolicy) -> i32 {
+    match policy {
+        E2eePolicy::Required => proto::E2eePolicy::Required,
+        E2eePolicy::Optional => proto::E2eePolicy::Optional,
+    }
+    .into()
+}
+
+/// Anything but an explicit optional is required, unspecified included: the server
+/// reads it that way, and an SDK that showed a stricter mode it did not recognise as
+/// optional would be telling a backend its room is open when it is not.
+pub(crate) fn e2ee_in(value: i32) -> E2eePolicy {
+    match proto::E2eePolicy::try_from(value) {
+        Ok(proto::E2eePolicy::Optional) => E2eePolicy::Optional,
+        _ => E2eePolicy::Required,
+    }
 }
 
 pub(crate) fn recording_in(value: i32) -> RecordingPolicy {
@@ -405,6 +423,7 @@ pub(crate) fn policy_out(policy: &Policy) -> proto::RoomPolicy {
         max_participants: policy.max_participants,
         stage_slots: policy.stage_slots,
         watchdog_limit: policy.watchdog_limit,
+        e2ee: e2ee_out(policy.e2ee),
     }
 }
 
@@ -423,6 +442,7 @@ pub(crate) fn policy_in(wire: Option<proto::RoomPolicy>) -> Policy {
         max_participants: wire.max_participants,
         stage_slots: wire.stage_slots,
         watchdog_limit: wire.watchdog_limit,
+        e2ee: e2ee_in(wire.e2ee),
     }
 }
 
@@ -495,6 +515,7 @@ pub(crate) fn entry_in(wire: proto::ModerationEntry) -> Entry {
         grants: grants_in(wire.grants),
         enforced: wire.enforced,
         decided_by_model: wire.decided_by_model,
+        policy_change: wire.policy_change,
     }
 }
 
@@ -515,4 +536,32 @@ pub(crate) fn time_out(at: Option<SystemTime>) -> Option<prost_types::Timestamp>
         seconds: i64::try_from(since.as_secs()).ok()?,
         nanos: i32::try_from(since.subsec_nanos()).ok()?,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// An unset or unrecognised wire value reads as required, never as optional.
+    #[test]
+    fn e2ee_fails_closed() {
+        assert_eq!(
+            e2ee_in(proto::E2eePolicy::Unspecified.into()),
+            E2eePolicy::Required
+        );
+        assert_eq!(
+            e2ee_in(proto::E2eePolicy::Required.into()),
+            E2eePolicy::Required
+        );
+        assert_eq!(
+            e2ee_in(proto::E2eePolicy::Optional.into()),
+            E2eePolicy::Optional
+        );
+        assert_eq!(e2ee_in(99), E2eePolicy::Required);
+        assert_eq!(Policy::default().e2ee, E2eePolicy::Required);
+        assert_eq!(
+            e2ee_out(E2eePolicy::Optional),
+            i32::from(proto::E2eePolicy::Optional)
+        );
+    }
 }

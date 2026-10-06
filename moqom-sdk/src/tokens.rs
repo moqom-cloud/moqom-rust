@@ -49,8 +49,8 @@ pub struct TokenRequest {
     pub owner: bool,
 
     /// How long the token is good for. Zero takes the server's default. Short on purpose --
-    /// a token is the one credential that leaves the building, and until proof-of-possession
-    /// lands a stolen one is replayable.
+    /// a token is the one credential that leaves the building. Relays also require proof of
+    /// the device key it is bound to, so a copied token is useless on another device.
     pub lifetime: Duration,
 
     /// Join backstage rather than the room proper. The token names the backstage namespace,
@@ -107,6 +107,7 @@ impl Client {
             lifetime: crate::types::optional(request.lifetime),
             backstage: request.backstage,
             age_verified: request.age_verified,
+            arrived_via: String::new(),
         };
 
         let response = self

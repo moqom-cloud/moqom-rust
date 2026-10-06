@@ -10,8 +10,12 @@ dependency graph. A Rust process that wants to *receive frames* depends on
 
 ```toml
 [dependencies]
-moqom-sdk = "0.1"
+moqom-sdk = { git = "https://github.com/moqom-cloud/moqom-rust", tag = "v0.1.0" }
 ```
+
+Documentation is at [moqom.dev](https://moqom.dev); the
+[Rust backend guide](https://moqom.dev/guides/backend-rust/) covers everything
+below in more depth.
 
 ## The call you will make most
 
@@ -98,6 +102,32 @@ while let Some(event) = events.next().await? {
 # }
 ```
 
+## End-to-end encryption
+
+Rooms are end-to-end encrypted unless your backend says otherwise: `Policy::e2ee`
+defaults to `E2eePolicy::Required`, and the server reads an unset field the same way.
+Relaxing it to `Optional` is a security change, so it needs a reason. It is written to
+the moderation log as `policy_change: "e2ee: required -> optional"` and announced on
+the room's event stream. Clients learn the policy from tokens minted after the change.
+
+```rust,no_run
+use moqom_sdk::{Actor, Client, E2eePolicy, Policy, PolicyUpdate};
+
+# async fn example(client: Client) -> Result<(), moqom_sdk::Error> {
+client
+    .room("live/42")
+    .update_policy(PolicyUpdate {
+        policy: Policy { e2ee: E2eePolicy::Optional, ..Default::default() },
+        fields: vec!["e2ee".into()],
+        actor: Actor::on_behalf_of("jane").because("guest on a browser without keys"),
+    })
+    .await?;
+# Ok(())
+# }
+```
+
+Name `e2ee` in `fields`, as above, so the call changes nothing else.
+
 ## Identity
 
 There are no numeric user IDs and nowhere to put one. A username is a string you
@@ -119,6 +149,17 @@ cannot act on each other — the property every level scheme gets wrong. The bit
 positions are protocol: a token carries them, the relay reads them, and the Go and
 Swift SDKs use the same ones.
 
+## Contribute
+
+Bug reports, fixes and examples are welcome. Read
+[CONTRIBUTING.md](../CONTRIBUTING.md): the first pull request asks you to sign the
+CLA, and `cargo test --workspace` runs with no account or network.
+
+## Donate
+
+The SDKs and samples are free. If they save you time, you can support the
+open-source work at [elliottwave.dev/donate](https://elliottwave.dev/donate/).
+
 ## Licence
 
-Apache-2.0.
+Apache-2.0. © 2026 Elliott Wave LLC.

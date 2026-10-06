@@ -174,6 +174,24 @@ pub enum RecordingPolicy {
     Prohibited,
 }
 
+/// Whether a room's media must be end-to-end encrypted.
+///
+/// Defaults to [`E2eePolicy::Required`], and the server reads an unset field the same
+/// way: a room is encrypted unless your backend says otherwise. Setting
+/// [`E2eePolicy::Optional`] needs `Actor::reason`; the change is written to the
+/// moderation log and announced on the room's event stream. Clients learn the policy
+/// from the `e2ee` claim in tokens minted for the room afterwards, and an SDK holding no
+/// key refuses to publish into a required room.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[non_exhaustive]
+pub enum E2eePolicy {
+    /// Media must be end-to-end encrypted.
+    #[default]
+    Required,
+    /// Media may travel in the clear when a client has no key.
+    Optional,
+}
+
 /// Why a session ended, when a moderator ended it.
 ///
 /// Sent to the client so it can say something true before the stream goes dark. A stream
@@ -304,6 +322,9 @@ pub struct Policy {
     /// How many observers may attach. Also a real limit: each one is a subscriber the
     /// relay fans out to.
     pub watchdog_limit: u32,
+
+    /// Whether media must be end-to-end encrypted. Required unless set otherwise.
+    pub e2ee: E2eePolicy,
 }
 
 /// A room's state.
@@ -573,6 +594,11 @@ pub struct Entry {
 
     /// Names the model and version when a classifier decided rather than a person.
     pub decided_by_model: String,
+
+    /// For [`Verb::UpdateRoomPolicy`], the security settings that moved, as
+    /// `field: from -> to` -- for example `e2ee: required -> optional`. Empty when
+    /// nothing of that kind changed.
+    pub policy_change: String,
 }
 
 /// A freshly minted client token.
