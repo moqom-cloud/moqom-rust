@@ -211,19 +211,13 @@ pub(crate) fn recording_out(policy: RecordingPolicy) -> i32 {
 pub(crate) fn e2ee_out(policy: E2eePolicy) -> i32 {
     match policy {
         E2eePolicy::Required => proto::E2eePolicy::Required,
-        E2eePolicy::Optional => proto::E2eePolicy::Optional,
     }
     .into()
 }
 
-/// Anything but an explicit optional is required, unspecified included: the server
-/// reads it that way, and an SDK that showed a stricter mode it did not recognise as
-/// optional would be telling a backend its room is open when it is not.
-pub(crate) fn e2ee_in(value: i32) -> E2eePolicy {
-    match proto::E2eePolicy::try_from(value) {
-        Ok(proto::E2eePolicy::Optional) => E2eePolicy::Optional,
-        _ => E2eePolicy::Required,
-    }
+/// Every room is required, whatever the wire says.
+pub(crate) fn e2ee_in(_value: i32) -> E2eePolicy {
+    E2eePolicy::Required
 }
 
 pub(crate) fn recording_in(value: i32) -> RecordingPolicy {
@@ -542,9 +536,9 @@ pub(crate) fn time_out(at: Option<SystemTime>) -> Option<prost_types::Timestamp>
 mod tests {
     use super::*;
 
-    /// An unset or unrecognised wire value reads as required, never as optional.
+    /// Every wire value reads as required, the refused optional included.
     #[test]
-    fn e2ee_fails_closed() {
+    fn e2ee_is_always_required() {
         assert_eq!(
             e2ee_in(proto::E2eePolicy::Unspecified.into()),
             E2eePolicy::Required
@@ -555,13 +549,13 @@ mod tests {
         );
         assert_eq!(
             e2ee_in(proto::E2eePolicy::Optional.into()),
-            E2eePolicy::Optional
+            E2eePolicy::Required
         );
         assert_eq!(e2ee_in(99), E2eePolicy::Required);
         assert_eq!(Policy::default().e2ee, E2eePolicy::Required);
         assert_eq!(
-            e2ee_out(E2eePolicy::Optional),
-            i32::from(proto::E2eePolicy::Optional)
+            e2ee_out(E2eePolicy::Required),
+            i32::from(proto::E2eePolicy::Required)
         );
     }
 }

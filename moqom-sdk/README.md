@@ -104,29 +104,10 @@ while let Some(event) = events.next().await? {
 
 ## End-to-end encryption
 
-Rooms are end-to-end encrypted unless your backend says otherwise: `Policy::e2ee`
-defaults to `E2eePolicy::Required`, and the server reads an unset field the same way.
-Relaxing it to `Optional` is a security change, so it needs a reason. It is written to
-the moderation log as `policy_change: "e2ee: required -> optional"` and announced on
-the room's event stream. Clients learn the policy from tokens minted after the change.
-
-```rust,no_run
-use moqom_sdk::{Actor, Client, E2eePolicy, Policy, PolicyUpdate};
-
-# async fn example(client: Client) -> Result<(), moqom_sdk::Error> {
-client
-    .room("live/42")
-    .update_policy(PolicyUpdate {
-        policy: Policy { e2ee: E2eePolicy::Optional, ..Default::default() },
-        fields: vec!["e2ee".into()],
-        actor: Actor::on_behalf_of("jane").because("guest on a browser without keys"),
-    })
-    .await?;
-# Ok(())
-# }
-```
-
-Name `e2ee` in `fields`, as above, so the call changes nothing else.
+Every room is end-to-end encrypted, with post-quantum keys and signatures, and there is
+no way to turn it off: `Policy::e2ee` is always `E2eePolicy::Required`. A recorder or
+classifier that needs the media joins the room's group as a disclosed member and
+decrypts on your side.
 
 ## Identity
 
