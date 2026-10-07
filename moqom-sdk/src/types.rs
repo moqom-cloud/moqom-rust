@@ -619,8 +619,8 @@ pub struct VerificationKey {
     /// Which key.
     pub key_id: String,
 
-    /// The algorithm as a JOSE identifier. `EdDSA` over Ed25519 today: small signatures,
-    /// fast verification on a relay's hot path, and no curve parameters to get wrong.
+    /// The algorithm as a JOSE identifier: `ML-DSA-65` (FIPS 204), which every token is
+    /// signed with, or `EdDSA` for an Ed25519 key kept only to verify older tokens.
     pub algorithm: String,
 
     /// The public key, as JSON.
