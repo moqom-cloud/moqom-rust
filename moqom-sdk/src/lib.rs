@@ -90,8 +90,8 @@ pub use moderation::{
 pub use rooms::{NewRoom, NewWatchdog, ParticipantQuery, PolicyUpdate, RoomQuery};
 pub use tokens::{TokenRequest, VerificationKeys};
 pub use types::{
-    Actor, AgeGate, BanScope, BanSubject, Binding, Code, Entry, Identity, Lifecycle, Media,
-    MuteScope, Page, Participant, ParticipantRef, Policy, Presence, RecordingPolicy, RoomState,
-    Token, Verb, VerificationKey, Watchdog, WatchdogHealth, WatchdogKind, WatchdogOperator, device,
-    target,
+    Actor, AgeGate, BanScope, BanSubject, Binding, Code, DirectGrant, DirectPaths, E2eePolicy,
+    Entry, Identity, Lifecycle, Media, MuteScope, Page, Participant, ParticipantRef, Policy,
+    Presence, RecordingPolicy, RoomState, StunEndpoint, Token, Verb, VerificationKey, Watchdog,
+    WatchdogHealth, WatchdogKind, WatchdogOperator, device, target,
 };

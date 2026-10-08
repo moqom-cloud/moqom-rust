@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use crate::client::{Client, call};
-use crate::convert::{grants_out, identity_in, preset_out, time_in};
+use crate::convert::{direct_grant_in, grants_out, identity_in, preset_out, time_in};
 use crate::error::{Error, Result};
 use crate::grants::{Capability, Grants, Preset, Publish};
 use crate::proto;
@@ -49,8 +49,8 @@ pub struct TokenRequest {
     pub owner: bool,
 
     /// How long the token is good for. Zero takes the server's default. Short on purpose --
-    /// a token is the one credential that leaves the building, and until proof-of-possession
-    /// lands a stolen one is replayable.
+    /// a token is the one credential that leaves the building. Relays also require proof of
+    /// the device key it is bound to, so a copied token is useless on another device.
     pub lifetime: Duration,
 
     /// Join backstage rather than the room proper. The token names the backstage namespace,
@@ -107,6 +107,7 @@ impl Client {
             lifetime: crate::types::optional(request.lifetime),
             backstage: request.backstage,
             age_verified: request.age_verified,
+            arrived_via: String::new(),
         };
 
         let response = self
@@ -122,6 +123,7 @@ impl Client {
             expires_at: time_in(response.expires_at),
             identity: identity_in(response.identity),
             key_id: response.key_id,
+            direct: direct_grant_in(response.direct),
         })
     }
 

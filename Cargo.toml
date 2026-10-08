@@ -5,7 +5,7 @@ members = ["moqom-sdk"]
 # A repository of its own, not part of moqom-engine.
 #
 # Two reasons, and the licence is the smaller one. The engine is where the relay
-# lives, which is BUSL-1.1, and this is Apache-2.0 -- but crates carry their own
+# lives, which is proprietary, and this is Apache-2.0 -- but crates carry their own
 # licence fields, so that alone would not need a split. The reason that does is
 # that the engine patches crates.io to a vendored quinn, and a patch applies to a
 # whole workspace. A backend that takes a dependency on this SDK should not
@@ -18,7 +18,7 @@ members = ["moqom-sdk"]
 [workspace.package]
 edition = "2024"
 rust-version = "1.97"
-authors = ["MOQOM"]
+authors = ["Elliott Wave LLC"]
 license = "Apache-2.0"
 repository = "https://github.com/moqom-cloud/moqom-rust"
 

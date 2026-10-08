@@ -68,6 +68,8 @@ impl ControlPlane {
             .env("MOQOM_CONTROL_ACCOUNTS", accounts.path())
             .env("MOQOM_CONTROL_STORE", "memory")
             .env("MOQOM_CONTROL_ISSUER", "moqom-interop")
+            // The control plane refuses plaintext unless told; loopback only.
+            .env("MOQOM_CONTROL_ALLOW_PLAINTEXT", "true")
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
@@ -197,7 +199,7 @@ async fn the_rust_sdk_runs_a_room() {
     let token = client
         .mint_token(TokenRequest {
             username: "bob".into(),
-            device_thumbprint: "thumbprint-of-bobs-phone".into(),
+            device_thumbprint: "thumbprint-of-bobs-phonethumbprint-of-bobsA".into(),
             room: "rust-room".into(),
             publish: Publish::CAMERA,
             preset: Some(Preset::Moderator),
@@ -223,7 +225,7 @@ async fn the_rust_sdk_runs_a_room() {
         Some(token.key_id.as_str()),
         "the key that signed the token is not published"
     );
-    assert_eq!(keys.keys[0].algorithm, "EdDSA");
+    assert_eq!(keys.keys[0].algorithm, "ML-DSA-65");
 
     // Moderation, and the record of it.
     let entry = handle
@@ -271,7 +273,7 @@ async fn the_rust_sdk_runs_a_room() {
     let refused = client
         .mint_token(TokenRequest {
             username: "dave".into(),
-            device_thumbprint: "thumbprint-of-daves-phone".into(),
+            device_thumbprint: "thumbprint-of-daves-phonethumbprint-of-davA".into(),
             room: "rust-room".into(),
             ..TokenRequest::default()
         })

@@ -14,9 +14,9 @@ use std::time::SystemTime;
 use crate::grants::{Capability, Grants, Preset, Publish};
 use crate::proto;
 use crate::types::{
-    AgeGate, BanScope, BanSubject, Code, Entry, Identity, Lifecycle, Media, MuteScope, Participant,
-    ParticipantRef, Policy, Presence, RecordingPolicy, RoomState, Verb, Watchdog, WatchdogHealth,
-    WatchdogKind, WatchdogOperator,
+    AgeGate, BanScope, BanSubject, Code, DirectGrant, DirectPaths, E2eePolicy, Entry, Identity,
+    Lifecycle, Media, MuteScope, Participant, ParticipantRef, Policy, Presence, RecordingPolicy,
+    RoomState, StunEndpoint, Verb, Watchdog, WatchdogHealth, WatchdogKind, WatchdogOperator,
 };
 
 /// Capability bits paired with their wire values.
@@ -206,6 +206,18 @@ pub(crate) fn recording_out(policy: RecordingPolicy) -> i32 {
         RecordingPolicy::Prohibited => proto::RecordingPolicy::Prohibited,
     };
     wire as i32
+}
+
+pub(crate) fn e2ee_out(policy: E2eePolicy) -> i32 {
+    match policy {
+        E2eePolicy::Required => proto::E2eePolicy::Required,
+    }
+    .into()
+}
+
+/// Every room is required, whatever the wire says.
+pub(crate) fn e2ee_in(_value: i32) -> E2eePolicy {
+    E2eePolicy::Required
 }
 
 pub(crate) fn recording_in(value: i32) -> RecordingPolicy {
@@ -405,7 +417,41 @@ pub(crate) fn policy_out(policy: &Policy) -> proto::RoomPolicy {
         max_participants: policy.max_participants,
         stage_slots: policy.stage_slots,
         watchdog_limit: policy.watchdog_limit,
+        e2ee: e2ee_out(policy.e2ee),
+        direct_paths: direct_out(policy.direct_paths),
+        max_direct_participants: policy.max_direct_participants,
     }
+}
+
+pub(crate) fn direct_out(direct: DirectPaths) -> i32 {
+    let wire = match direct {
+        DirectPaths::Unset => proto::DirectPaths::Unspecified,
+        DirectPaths::Allowed => proto::DirectPaths::Allowed,
+        DirectPaths::RelayOnly => proto::DirectPaths::RelayOnly,
+    };
+    wire as i32
+}
+
+pub(crate) fn direct_in(value: i32) -> DirectPaths {
+    match proto::DirectPaths::try_from(value) {
+        Ok(proto::DirectPaths::Allowed) => DirectPaths::Allowed,
+        Ok(proto::DirectPaths::RelayOnly) => DirectPaths::RelayOnly,
+        _ => DirectPaths::Unset,
+    }
+}
+
+pub(crate) fn direct_grant_in(grant: Option<proto::DirectGrant>) -> Option<DirectGrant> {
+    grant.map(|grant| DirectGrant {
+        allowed: grant.allowed,
+        max_participants: grant.max_participants,
+        stun: grant.stun.and_then(|stun| {
+            let port = u16::try_from(stun.port).ok().filter(|port| *port != 0)?;
+            (!stun.host.is_empty()).then_some(StunEndpoint {
+                host: stun.host,
+                port,
+            })
+        }),
+    })
 }
 
 pub(crate) fn policy_in(wire: Option<proto::RoomPolicy>) -> Policy {
@@ -423,6 +469,9 @@ pub(crate) fn policy_in(wire: Option<proto::RoomPolicy>) -> Policy {
         max_participants: wire.max_participants,
         stage_slots: wire.stage_slots,
         watchdog_limit: wire.watchdog_limit,
+        e2ee: e2ee_in(wire.e2ee),
+        direct_paths: direct_in(wire.direct_paths),
+        max_direct_participants: wire.max_direct_participants,
     }
 }
 
@@ -495,6 +544,7 @@ pub(crate) fn entry_in(wire: proto::ModerationEntry) -> Entry {
         grants: grants_in(wire.grants),
         enforced: wire.enforced,
         decided_by_model: wire.decided_by_model,
+        policy_change: wire.policy_change,
     }
 }
 
@@ -515,4 +565,87 @@ pub(crate) fn time_out(at: Option<SystemTime>) -> Option<prost_types::Timestamp>
         seconds: i64::try_from(since.as_secs()).ok()?,
         nanos: i32::try_from(since.subsec_nanos()).ok()?,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every wire value reads as required, the refused optional included.
+    #[test]
+    fn direct_paths_round_trip() {
+        for direct in [
+            DirectPaths::Unset,
+            DirectPaths::Allowed,
+            DirectPaths::RelayOnly,
+        ] {
+            assert_eq!(direct_in(direct_out(direct)), direct);
+        }
+        let policy = Policy {
+            direct_paths: DirectPaths::RelayOnly,
+            max_direct_participants: 2,
+            ..Policy::default()
+        };
+        assert_eq!(policy_in(Some(policy_out(&policy))), policy);
+        assert_eq!(
+            direct_grant_in(Some(proto::DirectGrant {
+                allowed: true,
+                max_participants: 4,
+                stun: None,
+            })),
+            Some(DirectGrant {
+                allowed: true,
+                max_participants: 4,
+                stun: None,
+            })
+        );
+    }
+
+    #[test]
+    fn the_grant_carries_the_stun_server() {
+        let grant = |host: &str, port| proto::DirectGrant {
+            allowed: true,
+            max_participants: 2,
+            stun: Some(proto::StunEndpoint {
+                host: host.to_owned(),
+                port,
+            }),
+        };
+        assert_eq!(
+            direct_grant_in(Some(grant("relay.moqom.cloud", 3478))).and_then(|g| g.stun),
+            Some(StunEndpoint {
+                host: "relay.moqom.cloud".to_owned(),
+                port: 3478
+            })
+        );
+        // Nothing a device could dial.
+        for (host, port) in [("", 3478), ("relay", 0), ("relay", 70_000)] {
+            assert_eq!(
+                direct_grant_in(Some(grant(host, port))).and_then(|g| g.stun),
+                None
+            );
+        }
+    }
+
+    #[test]
+    fn e2ee_is_always_required() {
+        assert_eq!(
+            e2ee_in(proto::E2eePolicy::Unspecified.into()),
+            E2eePolicy::Required
+        );
+        assert_eq!(
+            e2ee_in(proto::E2eePolicy::Required.into()),
+            E2eePolicy::Required
+        );
+        assert_eq!(
+            e2ee_in(proto::E2eePolicy::Optional.into()),
+            E2eePolicy::Required
+        );
+        assert_eq!(e2ee_in(99), E2eePolicy::Required);
+        assert_eq!(Policy::default().e2ee, E2eePolicy::Required);
+        assert_eq!(
+            e2ee_out(E2eePolicy::Required),
+            i32::from(proto::E2eePolicy::Required)
+        );
+    }
 }

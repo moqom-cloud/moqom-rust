@@ -56,11 +56,11 @@ pub struct PolicyUpdate {
     pub policy: Policy,
 
     /// Which parts of `policy` to apply, using the proto field names: `age_gate`,
-    /// `recording`, `max_participants`, `stage_slots`, `watchdog_limit`.
+    /// `recording`, `max_participants`, `stage_slots`, `watchdog_limit`, `e2ee`.
     ///
     /// Empty applies all of them, which is a read-modify-write and will clobber a
     /// concurrent change. Naming the fields you meant to change is almost always what you
-    /// want.
+    /// want. End-to-end encryption is required whatever the update says.
     pub fields: Vec<String>,
 
     /// Who is asking, and why.

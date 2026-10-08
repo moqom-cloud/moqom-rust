@@ -174,6 +174,18 @@ pub enum RecordingPolicy {
     Prohibited,
 }
 
+/// Whether a room's media must be end-to-end encrypted. It must:
+/// [`E2eePolicy::Required`] is the only value, and there is no turning it off. A
+/// recorder or classifier that needs the media joins the room's group as a disclosed
+/// member and decrypts on your side.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[non_exhaustive]
+pub enum E2eePolicy {
+    /// Media must be end-to-end encrypted.
+    #[default]
+    Required,
+}
+
 /// Why a session ended, when a moderator ended it.
 ///
 /// Sent to the client so it can say something true before the stream goes dark. A stream
@@ -304,6 +316,57 @@ pub struct Policy {
     /// How many observers may attach. Also a real limit: each one is a subscriber the
     /// relay fans out to.
     pub watchdog_limit: u32,
+
+    /// Whether media must be end-to-end encrypted. Required unless set otherwise.
+    pub e2ee: E2eePolicy,
+
+    /// Whether participants may carry media device to device, which tells each of
+    /// them the others' IP addresses.
+    pub direct_paths: DirectPaths,
+
+    /// The most participants the room may have and still use direct paths: 2 to 4,
+    /// or zero for 4.
+    pub max_direct_participants: u32,
+}
+
+/// Whether a room's participants may carry media device to device rather than
+/// through a relay. Even where allowed, only an end-to-end encrypted room within
+/// its limit, with no watchdog and no audience, where every participant has
+/// opted in, does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[non_exhaustive]
+pub enum DirectPaths {
+    /// Take the server's default, which allows them.
+    #[default]
+    Unset,
+    /// Participants may go device to device.
+    Allowed,
+    /// Every participant's media goes through the relay.
+    RelayOnly,
+}
+
+/// What a token's room allows of direct paths, to hand to the client with the
+/// token.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct DirectGrant {
+    /// Direct paths are allowed at all.
+    pub allowed: bool,
+    /// The most participants the room may have while they are used.
+    pub max_participants: u32,
+    /// Where the device asks for its public address before offering a direct
+    /// path: the relays' STUN responder. `None` when direct paths are not
+    /// allowed or the deployment names none. `MoqomKit` reads it as `stun`
+    /// within `direct`, `{"host": …, "port": …}`.
+    pub stun: Option<StunEndpoint>,
+}
+
+/// A STUN server.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct StunEndpoint {
+    /// A host name or an address literal.
+    pub host: String,
+    /// The UDP port, usually 3478.
+    pub port: u16,
 }
 
 /// A room's state.
@@ -573,6 +636,11 @@ pub struct Entry {
 
     /// Names the model and version when a classifier decided rather than a person.
     pub decided_by_model: String,
+
+    /// For [`Verb::UpdateRoomPolicy`] entries written when a room's encryption could
+    /// still be relaxed, what moved, as `field: from -> to`. Empty on every entry
+    /// written since.
+    pub policy_change: String,
 }
 
 /// A freshly minted client token.
@@ -591,6 +659,10 @@ pub struct Token {
 
     /// Which signing key was used.
     pub key_id: String,
+
+    /// What the token's room allows of direct paths; `None` for a token that
+    /// names no room.
+    pub direct: Option<DirectGrant>,
 }
 
 /// A public key tokens can be verified with.
@@ -599,8 +671,8 @@ pub struct VerificationKey {
     /// Which key.
     pub key_id: String,
 
-    /// The algorithm as a JOSE identifier. `EdDSA` over Ed25519 today: small signatures,
-    /// fast verification on a relay's hot path, and no curve parameters to get wrong.
+    /// The algorithm as a JOSE identifier: `ML-DSA-65` (FIPS 204), which every token is
+    /// signed with, or `EdDSA` for an Ed25519 key kept only to verify older tokens.
     pub algorithm: String,
 
     /// The public key, as JSON.
