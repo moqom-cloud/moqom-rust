@@ -347,12 +347,26 @@ pub enum DirectPaths {
 
 /// What a token's room allows of direct paths, to hand to the client with the
 /// token.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DirectGrant {
     /// Direct paths are allowed at all.
     pub allowed: bool,
     /// The most participants the room may have while they are used.
     pub max_participants: u32,
+    /// Where the device asks for its public address before offering a direct
+    /// path: the relays' STUN responder. `None` when direct paths are not
+    /// allowed or the deployment names none. `MoqomKit` reads it as `stun`
+    /// within `direct`, `{"host": …, "port": …}`.
+    pub stun: Option<StunEndpoint>,
+}
+
+/// A STUN server.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct StunEndpoint {
+    /// A host name or an address literal.
+    pub host: String,
+    /// The UDP port, usually 3478.
+    pub port: u16,
 }
 
 /// A room's state.

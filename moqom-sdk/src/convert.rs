@@ -16,7 +16,7 @@ use crate::proto;
 use crate::types::{
     AgeGate, BanScope, BanSubject, Code, DirectGrant, DirectPaths, E2eePolicy, Entry, Identity,
     Lifecycle, Media, MuteScope, Participant, ParticipantRef, Policy, Presence, RecordingPolicy,
-    RoomState, Verb, Watchdog, WatchdogHealth, WatchdogKind, WatchdogOperator,
+    RoomState, StunEndpoint, Verb, Watchdog, WatchdogHealth, WatchdogKind, WatchdogOperator,
 };
 
 /// Capability bits paired with their wire values.
@@ -444,6 +444,13 @@ pub(crate) fn direct_grant_in(grant: Option<proto::DirectGrant>) -> Option<Direc
     grant.map(|grant| DirectGrant {
         allowed: grant.allowed,
         max_participants: grant.max_participants,
+        stun: grant.stun.and_then(|stun| {
+            let port = u16::try_from(stun.port).ok().filter(|port| *port != 0)?;
+            (!stun.host.is_empty()).then_some(StunEndpoint {
+                host: stun.host,
+                port,
+            })
+        }),
     })
 }
 
@@ -583,13 +590,41 @@ mod tests {
         assert_eq!(
             direct_grant_in(Some(proto::DirectGrant {
                 allowed: true,
-                max_participants: 4
+                max_participants: 4,
+                stun: None,
             })),
             Some(DirectGrant {
                 allowed: true,
-                max_participants: 4
+                max_participants: 4,
+                stun: None,
             })
         );
+    }
+
+    #[test]
+    fn the_grant_carries_the_stun_server() {
+        let grant = |host: &str, port| proto::DirectGrant {
+            allowed: true,
+            max_participants: 2,
+            stun: Some(proto::StunEndpoint {
+                host: host.to_owned(),
+                port,
+            }),
+        };
+        assert_eq!(
+            direct_grant_in(Some(grant("relay.moqom.cloud", 3478))).and_then(|g| g.stun),
+            Some(StunEndpoint {
+                host: "relay.moqom.cloud".to_owned(),
+                port: 3478
+            })
+        );
+        // Nothing a device could dial.
+        for (host, port) in [("", 3478), ("relay", 0), ("relay", 70_000)] {
+            assert_eq!(
+                direct_grant_in(Some(grant(host, port))).and_then(|g| g.stun),
+                None
+            );
+        }
     }
 
     #[test]
