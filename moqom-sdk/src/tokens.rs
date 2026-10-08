@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use crate::client::{Client, call};
-use crate::convert::{grants_out, identity_in, preset_out, time_in};
+use crate::convert::{direct_grant_in, grants_out, identity_in, preset_out, time_in};
 use crate::error::{Error, Result};
 use crate::grants::{Capability, Grants, Preset, Publish};
 use crate::proto;
@@ -123,6 +123,7 @@ impl Client {
             expires_at: time_in(response.expires_at),
             identity: identity_in(response.identity),
             key_id: response.key_id,
+            direct: direct_grant_in(response.direct),
         })
     }
 

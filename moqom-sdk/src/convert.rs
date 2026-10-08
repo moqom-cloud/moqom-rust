@@ -14,9 +14,9 @@ use std::time::SystemTime;
 use crate::grants::{Capability, Grants, Preset, Publish};
 use crate::proto;
 use crate::types::{
-    AgeGate, BanScope, BanSubject, Code, E2eePolicy, Entry, Identity, Lifecycle, Media, MuteScope,
-    Participant, ParticipantRef, Policy, Presence, RecordingPolicy, RoomState, Verb, Watchdog,
-    WatchdogHealth, WatchdogKind, WatchdogOperator,
+    AgeGate, BanScope, BanSubject, Code, DirectGrant, DirectPaths, E2eePolicy, Entry, Identity,
+    Lifecycle, Media, MuteScope, Participant, ParticipantRef, Policy, Presence, RecordingPolicy,
+    RoomState, Verb, Watchdog, WatchdogHealth, WatchdogKind, WatchdogOperator,
 };
 
 /// Capability bits paired with their wire values.
@@ -418,7 +418,33 @@ pub(crate) fn policy_out(policy: &Policy) -> proto::RoomPolicy {
         stage_slots: policy.stage_slots,
         watchdog_limit: policy.watchdog_limit,
         e2ee: e2ee_out(policy.e2ee),
+        direct_paths: direct_out(policy.direct_paths),
+        max_direct_participants: policy.max_direct_participants,
     }
+}
+
+pub(crate) fn direct_out(direct: DirectPaths) -> i32 {
+    let wire = match direct {
+        DirectPaths::Unset => proto::DirectPaths::Unspecified,
+        DirectPaths::Allowed => proto::DirectPaths::Allowed,
+        DirectPaths::RelayOnly => proto::DirectPaths::RelayOnly,
+    };
+    wire as i32
+}
+
+pub(crate) fn direct_in(value: i32) -> DirectPaths {
+    match proto::DirectPaths::try_from(value) {
+        Ok(proto::DirectPaths::Allowed) => DirectPaths::Allowed,
+        Ok(proto::DirectPaths::RelayOnly) => DirectPaths::RelayOnly,
+        _ => DirectPaths::Unset,
+    }
+}
+
+pub(crate) fn direct_grant_in(grant: Option<proto::DirectGrant>) -> Option<DirectGrant> {
+    grant.map(|grant| DirectGrant {
+        allowed: grant.allowed,
+        max_participants: grant.max_participants,
+    })
 }
 
 pub(crate) fn policy_in(wire: Option<proto::RoomPolicy>) -> Policy {
@@ -437,6 +463,8 @@ pub(crate) fn policy_in(wire: Option<proto::RoomPolicy>) -> Policy {
         stage_slots: wire.stage_slots,
         watchdog_limit: wire.watchdog_limit,
         e2ee: e2ee_in(wire.e2ee),
+        direct_paths: direct_in(wire.direct_paths),
+        max_direct_participants: wire.max_direct_participants,
     }
 }
 
@@ -537,6 +565,33 @@ mod tests {
     use super::*;
 
     /// Every wire value reads as required, the refused optional included.
+    #[test]
+    fn direct_paths_round_trip() {
+        for direct in [
+            DirectPaths::Unset,
+            DirectPaths::Allowed,
+            DirectPaths::RelayOnly,
+        ] {
+            assert_eq!(direct_in(direct_out(direct)), direct);
+        }
+        let policy = Policy {
+            direct_paths: DirectPaths::RelayOnly,
+            max_direct_participants: 2,
+            ..Policy::default()
+        };
+        assert_eq!(policy_in(Some(policy_out(&policy))), policy);
+        assert_eq!(
+            direct_grant_in(Some(proto::DirectGrant {
+                allowed: true,
+                max_participants: 4
+            })),
+            Some(DirectGrant {
+                allowed: true,
+                max_participants: 4
+            })
+        );
+    }
+
     #[test]
     fn e2ee_is_always_required() {
         assert_eq!(

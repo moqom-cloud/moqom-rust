@@ -319,6 +319,40 @@ pub struct Policy {
 
     /// Whether media must be end-to-end encrypted. Required unless set otherwise.
     pub e2ee: E2eePolicy,
+
+    /// Whether participants may carry media device to device, which tells each of
+    /// them the others' IP addresses.
+    pub direct_paths: DirectPaths,
+
+    /// The most participants the room may have and still use direct paths: 2 to 4,
+    /// or zero for 4.
+    pub max_direct_participants: u32,
+}
+
+/// Whether a room's participants may carry media device to device rather than
+/// through a relay. Even where allowed, only an end-to-end encrypted room within
+/// its limit, with no watchdog and no audience, where every participant has
+/// opted in, does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[non_exhaustive]
+pub enum DirectPaths {
+    /// Take the server's default, which allows them.
+    #[default]
+    Unset,
+    /// Participants may go device to device.
+    Allowed,
+    /// Every participant's media goes through the relay.
+    RelayOnly,
+}
+
+/// What a token's room allows of direct paths, to hand to the client with the
+/// token.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct DirectGrant {
+    /// Direct paths are allowed at all.
+    pub allowed: bool,
+    /// The most participants the room may have while they are used.
+    pub max_participants: u32,
 }
 
 /// A room's state.
@@ -611,6 +645,10 @@ pub struct Token {
 
     /// Which signing key was used.
     pub key_id: String,
+
+    /// What the token's room allows of direct paths; `None` for a token that
+    /// names no room.
+    pub direct: Option<DirectGrant>,
 }
 
 /// A public key tokens can be verified with.

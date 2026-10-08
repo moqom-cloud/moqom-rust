@@ -102,6 +102,16 @@ pub struct ActorContext {
     #[prost(string, tag = "3")]
     pub idempotency_key: ::prost::alloc::string::String,
 }
+/// What a room allows of direct (device-to-device) paths, as stated to a client
+/// with its token. See `RoomPolicy.direct_paths`.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct DirectGrant {
+    #[prost(bool, tag = "1")]
+    pub allowed: bool,
+    /// The most participants the room may have and still use direct paths.
+    #[prost(uint32, tag = "2")]
+    pub max_participants: u32,
+}
 /// How much a timecode should be believed.
 ///
 /// Mirrors `MoqomCore.TimeTrust` in the Swift SDK. The names are shared on
@@ -531,9 +541,18 @@ pub struct RoomPolicy {
     #[prost(uint32, tag = "6")]
     pub watchdog_limit: u32,
     /// Unset reads as `E2EE_POLICY_REQUIRED`, and a room read back from the server
-    /// always states it. Setting `E2EE_POLICY_OPTIONAL` needs `actor.reason`.
+    /// always states it. `E2EE_POLICY_OPTIONAL` is refused.
     #[prost(enumeration = "E2eePolicy", tag = "7")]
     pub e2ee: i32,
+    /// Whether participants may carry media device to device. Unset reads as
+    /// `DIRECT_PATHS_ALLOWED`. See `DirectPaths`.
+    #[prost(enumeration = "DirectPaths", tag = "8")]
+    pub direct_paths: i32,
+    /// The most participants the room may have and still use direct paths. Zero
+    /// reads as 4, which is also the most allowed: every extra peer costs each
+    /// publisher a full upload.
+    #[prost(uint32, tag = "9")]
+    pub max_direct_participants: u32,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Room {
@@ -931,22 +950,22 @@ impl RecordingPolicy {
         }
     }
 }
-/// Whether a room's media must be end-to-end encrypted.
+/// Whether a room's media must be end-to-end encrypted. It must, always: there
+/// is no way to turn it off. Unspecified and `E2EE_POLICY_REQUIRED` are
+/// accepted and mean the same; `E2EE_POLICY_OPTIONAL` is refused with
+/// INVALID_ARGUMENT and kept only so that an old backend's request fails
+/// loudly rather than decoding as something else. A recorder or classifier
+/// that needs the media joins the room's MLS group as a disclosed member and
+/// decrypts on the tenant's side.
 ///
-/// Required unless somebody turned it off, and the zero value means required so
-/// that a backend built before this field existed, which never sets it, gets the
-/// strict answer rather than the permissive one. Turning it off is a policy
-/// change like any other and is written to the moderation log with the actor's
-/// reason, which is mandatory for this change and no other: a room that stops
-/// being end-to-end encrypted is a fact somebody will one day ask about.
-///
-/// Clients learn the effective value from the `e2ee` claim in their token, and an
-/// SDK that holds no key refuses to publish into a required room.
+/// Clients learn the value from the `e2ee` claim in their token, and an SDK
+/// that holds no key refuses to publish.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum E2eePolicy {
     Unspecified = 0,
     Required = 1,
+    #[deprecated]
     Optional = 2,
 }
 impl E2eePolicy {
@@ -958,6 +977,7 @@ impl E2eePolicy {
         match self {
             Self::Unspecified => "E2EE_POLICY_UNSPECIFIED",
             Self::Required => "E2EE_POLICY_REQUIRED",
+            #[allow(deprecated)]
             Self::Optional => "E2EE_POLICY_OPTIONAL",
         }
     }
@@ -966,7 +986,46 @@ impl E2eePolicy {
         match value {
             "E2EE_POLICY_UNSPECIFIED" => Some(Self::Unspecified),
             "E2EE_POLICY_REQUIRED" => Some(Self::Required),
-            "E2EE_POLICY_OPTIONAL" => Some(Self::Optional),
+            "E2EE_POLICY_OPTIONAL" => Some(#[allow(deprecated)] Self::Optional),
+            _ => None,
+        }
+    }
+}
+/// Whether a room's participants may carry media device to device rather than
+/// through a relay.
+///
+/// A direct path tells each participant the others' IP addresses, so a room
+/// whose users must not learn them is `DIRECT_PATHS_RELAY_ONLY`. Even where
+/// allowed, only an end-to-end encrypted room of at most
+/// `max_direct_participants`, with no watchdog and no audience, where every
+/// participant has opted in, goes direct. Clients learn the policy with each
+/// token (`MintClientTokenResponse.direct`); a client that does not opt in keeps
+/// the whole room on the relay.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum DirectPaths {
+    Unspecified = 0,
+    Allowed = 1,
+    RelayOnly = 2,
+}
+impl DirectPaths {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "DIRECT_PATHS_UNSPECIFIED",
+            Self::Allowed => "DIRECT_PATHS_ALLOWED",
+            Self::RelayOnly => "DIRECT_PATHS_RELAY_ONLY",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "DIRECT_PATHS_UNSPECIFIED" => Some(Self::Unspecified),
+            "DIRECT_PATHS_ALLOWED" => Some(Self::Allowed),
+            "DIRECT_PATHS_RELAY_ONLY" => Some(Self::RelayOnly),
             _ => None,
         }
     }
@@ -3362,6 +3421,10 @@ pub struct MintClientTokenResponse {
     /// Which key signed it, matching a `VerificationKey.key_id`.
     #[prost(string, tag = "4")]
     pub key_id: ::prost::alloc::string::String,
+    /// What the token's room allows of direct paths, for the backend to hand to
+    /// the client with the token. Unset for a token that names no room.
+    #[prost(message, optional, tag = "5")]
+    pub direct: ::core::option::Option<DirectGrant>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct ListVerificationKeysRequest {
