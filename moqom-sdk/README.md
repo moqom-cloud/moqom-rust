@@ -4,7 +4,7 @@ The server-side SDK for [MOQOM](https://moqom.cloud). For a backend, not a
 participant: it mints the tokens your users join with, creates and closes rooms,
 moderates them, and follows what happens in them.
 
-Nothing here speaks MOQT, and that is the point — there is no QUIC in this crate's
+Nothing here speaks MOQT, and that is the point — there is no [QUIC](https://www.rfc-editor.org/rfc/rfc9000) in this crate's
 dependency graph. A Rust process that wants to *receive frames* depends on
 `moqom-client` (in the engine workspace), not this crate.
 
@@ -112,7 +112,7 @@ decrypts on your side.
 ## Identity
 
 There are no numeric user IDs and nowhere to put one. A username is a string you
-already have, and a device is derived from the device key's JWK thumbprint — so a
+already have, and a device is derived from the device key's [JWK](https://www.rfc-editor.org/rfc/rfc7517) thumbprint — so a
 device ban and the thumbprint you passed to `mint_token` are the same fact.
 
 ## Retries
